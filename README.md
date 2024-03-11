@@ -1,3 +1,3 @@
 # virtnet
 
-Simplifies the process of network creating process using `dnsmasq` and `hostapd`.
+Simplifies the process of creating a network using `dnsmasq` and `hostapd`.
