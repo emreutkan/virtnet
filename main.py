@@ -160,6 +160,25 @@ def change_channel():
                 elif selection == 'N':
                     return
 
+def switch_interface_to_monitor_mode():
+    print('Setting ' + interface + ' to monitor mode ')
+    run_command(f'ifconfig {interface} down')
+    run_command(f'iwconfig {interface} mode monitor')
+    run_command(f'ifconfig {interface} up')
+
+def run_command_print_output(command):
+    result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    print(f"Command: {command}")
+    if result.returncode == 0:
+        print(f"{green('Output')}   :   " + result.stdout)
+        print("-" * 30)
+        return result.stdout
+    else:
+        print(f"{red('Error')}      :   " + result.stderr)
+        print("-" * 30)
+        return result.stderr
+
 def popen_command_new_terminal(command):
     for terminal in terminals:
         try:
@@ -194,13 +213,24 @@ def create_file_in_tmp(file, content):
     print(f'{green(file)} created at {green(location)}')
 
 
+def interface_management(internet_access=False):
+    run_command_print_output('airmon-ng check kill')
+    switch_interface_to_monitor_mode()
+    run_command_print_output('echo 1 > /proc/sys/net/ipv4/ip_forward')
+    run_command_print_output(f'ip addr add {gateway}/24 dev {interface}')
+    if internet_access:
+        run_command_print_output(f'iptables -t nat -A POSTROUTING -o {internet_facing_interface} -j MASQUERADE')
+        run_command_print_output(f'iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT')
+        run_command_print_output(f'iptables -A FORWARD -i {interface} -o {internet_facing_interface} -j ACCEPT')
+
 def dnsmasq():
     conf_content = [
         f'interface={interface}',
         f"log-queries",
         f"log-dhcp",
-        f'dhcp-range={dhcp_range_start},{dhcp_range_end},{dhcp_range_mask}24h',
-        f'dhcp-option=option:router,{gateway}', # f'dhcp-option=3,{gateway}',
+        f'dhcp-range={dhcp_range_start},{dhcp_range_end},{dhcp_range_mask},24h',
+        f'dhcp-option=option:router,{gateway}'
+        # f'dhcp-option=3,{gateway}',
         # f'dhcp-option=option:dns-server,{gateway}', # f'dhcp-option=6,{gateway}',
         # f'listen-address=127.0.0.1',
         # f'server=8.8.8.8',
@@ -209,8 +239,8 @@ def dnsmasq():
     popen_command_new_terminal('dnsmasq -C /tmp/dnsmasq.conf -d')
 
 
-def hostapd(WPA2=True):
-    if WPA2:
+def hostapd(password=True):
+    if password:
         conf_content = [
             f'interface={interface}',
             f'driver=nl80211',
@@ -238,28 +268,48 @@ def hostapd(WPA2=True):
     create_file_in_tmp('hostapd.conf', conf_content)
     popen_command_new_terminal(f'hostapd /tmp/hostapd.conf')
 
+def create_network(password=False, internet_access=False):
+    interface_management(internet_access)
+    dnsmasq()
+    hostapd(password)
+    input('Press Enter to close the network')
+    close(internet_access)
+    return
 
+def close(internet_access=False):
+    run_command_print_output('airmon-ng check kill')
+    run_command_print_output('echo 0 > /proc/sys/net/ipv4/ip_forward')
+    run_command_print_output(f'ip addr flush dev {interface}')
+    run_command_print_output(f'iptables -t nat -D POSTROUTING -o {internet_facing_interface} -j MASQUERADE')
+    run_command_print_output(f'iptables -D FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT')
+    run_command_print_output(f'iptables -D FORWARD -i {interface} -o {internet_facing_interface} -j ACCEPT')
+    run_command_print_output(f'killall dnsmasq')
+    run_command_print_output(f'killall hostapd')
 if __name__ == "__main__":
     while 1:
         clear()
         inputs = [
-            f'{green("1)")} Change Broadcast Interface  {green("|")}   Current Broadcast Interface  : {green(interface)}',
-            f'{green("2)")} Change Internet Interface   {green("|")}   Current Internet  Interface  : {green(internet_facing_interface)}',
+            f'{green("1)")}  Change Broadcast Interface  {green("|")}   Current Broadcast Interface  : {green(interface)}',
+            f'{green("2)")}  Change Internet Interface   {green("|")}   Current Internet  Interface  : {green(internet_facing_interface)}',
             f'{green("-------------------------------------------------------------------------------------")}',
-            f'{green("3)")} Change Gateway              {green("|")}   Current Gateway              : {green(gateway)}',
-            f'                               {green("|")}   DHCP-START                   : {green(dhcp_range_start)}',
-            f'                               {green("|")}   DHCP-END                     : {green(dhcp_range_end)}',
-            f'{green("4)")} Change SSID                 {green("|")}   Current SSID                 : {green(ssid)}',
-            f'{green("5)")} Change Password             {green("|")}   Current Password             : {green(ssid_password)}',
-            f'{green("6)")} Change Channel              {green("|")}   Current Channel              : {green(channel)}',
+            f'{green("3)")}  Change Gateway              {green("|")}   Current Gateway              : {green(gateway)}',
+            f'                                {green("|")}   DHCP-START                   : {green(dhcp_range_start)}',
+            f'                                {green("|")}   DHCP-END                     : {green(dhcp_range_end)}',
+            f'{green("4)")}  Change SSID                 {green("|")}   Current SSID                 : {green(ssid)}',
+            f'{green("5)")}  Change Password             {green("|")}   Current Password             : {green(ssid_password)}',
+            f'{green("6)")}  Change Channel              {green("|")}   Current Channel              : {green(channel)}',
             f'{green("-------------------------------------------------------------------------------------")}',
-            f'{green("7)")}  Start WPA2 Encrypted Network      {green(ssid_password)}',
-            f'{green("8)")}  Start Open Network',
+            f'{green("7)")}  Start WPA2 Encrypted Network                                : {green(ssid_password)}',
+            f'{green("8)")}  Start WPA2 Encrypted Network w/ Internet access             : {green(ssid_password)}',
+            f'{green("9)")}  Start Open Network',
+            f'{green("10)")} Start Open Network w/ Internet access',
         ]
 
         for i in inputs:
             print(i)
-        match input(f'\n{red("> ")}').lower():
+        match input(f'\n{red("999 to quit > ")}'):
+            case '999':
+                break
             case '1':
                 change_interface()
             case '2':
@@ -273,8 +323,34 @@ if __name__ == "__main__":
             case '6':
                 change_channel()
             case '7':
-                break
+                if not interface:
+                    if input('Please select an interface first Y/N ?').upper() == 'Y':
+                        change_interface()
+                else:
+                    create_network(password=True)
             case '8':
-                break
+                if not interface:
+                    if input('Please select an interface first Y/N ?').upper() == 'Y':
+                        change_interface()
+                if not internet_facing_interface:
+                    if input('Please select an internet facing interface first Y/N ?').upper() == 'Y':
+                        change_internet_facing_interface()
+                else:
+                    create_network(password=True, internet_access=True)
+            case '9':
+                if not interface:
+                    if input('Please select an interface first Y/N ?').upper() == 'Y':
+                        change_interface()
+                else:
+                    create_network()
+            case '10':
+                if not interface:
+                    if input('Please select an interface first Y/N ?').upper() == 'Y':
+                        change_interface()
+                if not internet_facing_interface:
+                    if input('Please select an internet facing interface first Y/N ?').upper() == 'Y':
+                        change_internet_facing_interface()
+                else:
+                    create_network(internet_access=True)
 
 
