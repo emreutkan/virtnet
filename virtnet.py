@@ -17,12 +17,14 @@ ssid_password = 'password'
 def red(string):
     return f'\033[91m{string}\033[0m'
 
+
 def clear():
     subprocess.run('clear')
 
 
 def green(string):
     return f'\033[92m{string}\033[0m'
+
 
 def change_interface():
     global interface
@@ -46,6 +48,7 @@ def change_interface():
             elif int(selection) > interface_count:
                 print(f'Selected interface ({selection}) {red("does not exist")}')
 
+
 def change_internet_facing_interface():
     global internet_facing_interface
     print("Available Network Interfaces: \n")
@@ -68,6 +71,7 @@ def change_internet_facing_interface():
                 break
             elif int(selection) > interface_count:
                 print(f'Selected interface ({selection}) {red("does not exist")}')
+
 
 def change_gateway():
     global gateway
@@ -95,13 +99,14 @@ def change_gateway():
                 gateway = str(ip)
                 #
                 parts = str(ip).split('.')
-                parts[-1] = str(int(parts[-1]) +1)
+                parts[-1] = str(int(parts[-1]) + 1)
                 dhcp_range_start = '.'.join(parts)
                 parts[-1] = str(255)
                 dhcp_range_end = '.'.join(parts)
                 return
         except ValueError:
             print(f'Given input {green(new_gateway)} is not a valid IP Address')
+
 
 def change_ssid():
     global ssid
@@ -160,11 +165,13 @@ def change_channel():
                 elif selection == 'N':
                     return
 
+
 def switch_interface_to_monitor_mode():
     print('Setting ' + interface + ' to monitor mode ')
     run_command(f'ifconfig {interface} down')
     run_command(f'iwconfig {interface} mode monitor')
     run_command(f'ifconfig {interface} up')
+
 
 def run_command_print_output(command):
     result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -178,6 +185,7 @@ def run_command_print_output(command):
         print(f"{red('Error')}      :   " + result.stderr)
         print("-" * 30)
         return result.stderr
+
 
 def popen_command_new_terminal(command):
     for terminal in terminals:
@@ -196,6 +204,7 @@ def popen_command_new_terminal(command):
             return process
         except Exception as e:
             print(f"Failed to execute command in {terminal}: {e} \n")
+
 
 def run_command(command):
     result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -222,6 +231,7 @@ def interface_management(internet_access=False):
         run_command_print_output(f'iptables -t nat -A POSTROUTING -o {internet_facing_interface} -j MASQUERADE')
         run_command_print_output(f'iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT')
         run_command_print_output(f'iptables -A FORWARD -i {interface} -o {internet_facing_interface} -j ACCEPT')
+
 
 def dnsmasq():
     conf_content = [
@@ -268,6 +278,7 @@ def hostapd(password=True):
     create_file_in_tmp('hostapd.conf', conf_content)
     popen_command_new_terminal(f'hostapd /tmp/hostapd.conf')
 
+
 def create_network(password=False, internet_access=False):
     interface_management(internet_access)
     dnsmasq()
@@ -275,6 +286,7 @@ def create_network(password=False, internet_access=False):
     input('Press Enter to close the network')
     close(internet_access)
     return
+
 
 def close(internet_access=False):
     run_command_print_output('airmon-ng check kill')
@@ -285,30 +297,47 @@ def close(internet_access=False):
     run_command_print_output(f'iptables -D FORWARD -i {interface} -o {internet_facing_interface} -j ACCEPT')
     run_command_print_output(f'killall dnsmasq')
     run_command_print_output(f'killall hostapd')
+
+
 if __name__ == "__main__":
     while 1:
         clear()
+        print(green(
+            '''
+              _   _   _   ___   _____        __  _   ___   _____  
+             | \ / | | | | _ \ |_   _|  __  |  \| | | __| |_   _| 
+             `\ V /' | | | v /   | |   |__| | | ' | | _|    | |   
+               \_/   |_| |_|_\   |_|        |_|\__| |___|   |_|   
+             '''
+        )
+
+        )
         inputs = [
+            f'{green("-----------------------------------------------------------------------------------")}',
             f'{green("1)")}  Change Broadcast Interface  {green("|")}   Current Broadcast Interface  : {green(interface)}',
             f'{green("2)")}  Change Internet Interface   {green("|")}   Current Internet  Interface  : {green(internet_facing_interface)}',
-            f'{green("-------------------------------------------------------------------------------------")}',
+            f'{green("-----------------------------------------------------------------------------------")}',
             f'{green("3)")}  Change Gateway              {green("|")}   Current Gateway              : {green(gateway)}',
             f'                                {green("|")}   DHCP-START                   : {green(dhcp_range_start)}',
             f'                                {green("|")}   DHCP-END                     : {green(dhcp_range_end)}',
             f'{green("4)")}  Change SSID                 {green("|")}   Current SSID                 : {green(ssid)}',
             f'{green("5)")}  Change Password             {green("|")}   Current Password             : {green(ssid_password)}',
             f'{green("6)")}  Change Channel              {green("|")}   Current Channel              : {green(channel)}',
-            f'{green("-------------------------------------------------------------------------------------")}',
+            f'{green("-----------------------------------------------------------------------------------")}',
             f'{green("7)")}  Start WPA2 Encrypted Network                                : {green(ssid_password)}',
             f'{green("8)")}  Start WPA2 Encrypted Network w/ Internet access             : {green(ssid_password)}',
             f'{green("9)")}  Start Open Network',
             f'{green("10)")} Start Open Network w/ Internet access',
+            f'{green("-----------------------------------------------------------------------------------")}',
+            f'{green("Q)")}  Quit ',
+
+            f'{green("-----------------------------------------------------------------------------------")}',
         ]
 
         for i in inputs:
             print(i)
-        match input(f'\n{red("999 to quit > ")}'):
-            case '999':
+        match input(f'\n{red("> ")}').upper():
+            case 'Q':
                 break
             case '1':
                 change_interface()
@@ -352,5 +381,3 @@ if __name__ == "__main__":
                         change_internet_facing_interface()
                 else:
                     create_network(internet_access=True)
-
-
