@@ -336,7 +336,7 @@ if __name__ == "__main__":
 
         for i in inputs:
             print(i)
-        match input(f'\n{red("> ")}').upper():
+        match input(f'\n{red("virtnet > ")}').upper():
             case 'Q':
                 break
             case '1':
